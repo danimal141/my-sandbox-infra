@@ -1,0 +1,168 @@
+name: rails-eks-rails-prod-deploy
+
+on:
+  push:
+    paths:
+      - rails-app/**
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-push-image:
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: rails-app
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: AWS OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/application-cicd-in-github-actions
+          role-session-name: gh-actions
+          aws-region: ap-northeast-1
+
+      - name: "Set environment variables from AWS Parameter Store"
+        run: |
+          # Function to set environment variable from Parameter Store
+          # $1: Parameter Store path, $2: Environment variable name
+          function set_env_from_parameter_store() {
+              VALUE=$(aws ssm get-parameter --name $1 --with-decryption --query 'Parameter.Value' --output text)
+              echo "$2=$VALUE" >> $GITHUB_ENV
+              echo "::add-mask::$VALUE"
+          }
+          set_env_from_parameter_store '/eks-rails/rails/rails-master-key' 'RAILS_MASTER_KEY'
+
+      - name: "Login to Amazon ECR"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: "Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v1
+
+      - name: "Set environment variables for Docker repository tags"
+        id: set-env
+        run: |
+          ECR_URI=${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY=eks-rails-production
+          ref=${{ github.ref }}
+          REF_NAME=${ref#refs/heads/*}
+          TAG_NAME=$(echo $REF_NAME | sed -e 's/\//\-/g')
+          GITHUB_SHA=${{ github.sha }}
+          ECR_REPOSITORY_URI=$ECR_URI/$ECR_REPOSITORY
+          echo "REF_NAME=$REF_NAME" >> $GITHUB_ENV
+          echo "GITHUB_SHA=$GITHUB_SHA" >> $GITHUB_ENV
+          echo "ECR_REPOSITORY_URI=$ECR_REPOSITORY_URI" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$ECR_REPOSITORY_URI:$GITHUB_SHA" >> $GITHUB_ENV
+          echo "CACHE_TAG=$ECR_REPOSITORY_URI:build-cache" >> $GITHUB_ENV
+
+          # Create a human-readable tag using the branch name
+          echo "POINTER_TAG=$ECR_REPOSITORY_URI:$TAG_NAME" >> $GITHUB_ENV
+      - name: "Build Docker image"
+        run: |
+         if docker pull "$CACHE_TAG"; then
+            echo "Cache image found, using for build"
+          else
+            echo "No cache image found, building from scratch"
+          fi
+
+          docker buildx version
+          docker buildx ls
+
+          docker buildx build \
+            --file docker/Dockerfile \
+            --tag "$IMAGE_TAG" \
+            --cache-from "$CACHE_TAG" \
+            --build-arg RAILS_MASTER_KEY="$RAILS_MASTER_KEY" \
+            --load \
+            --progress plain \
+            .
+        working-directory: rails-app
+
+      - name: "Push image to Amazon ECR"
+        run: |
+          docker push $IMAGE_TAG
+          # Push cache image for future builds
+          docker tag $IMAGE_TAG $CACHE_TAG
+          docker push $CACHE_TAG
+          # Tag with a human-readable name for easy identification in ECR
+          docker tag $IMAGE_TAG $POINTER_TAG
+          docker push $POINTER_TAG
+        working-directory: rails-app
+  deploy:
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-push-image
+    timeout-minutes: 3
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AWS OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/application-cicd-in-github-actions
+          role-session-name: gh-actions
+          aws-region: ap-northeast-1
+
+      - name: "Login to Amazon ECR"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Replace image digest
+        run: |
+          set -euv
+          set -o pipefail
+          REPOSITORY_ROOT=$(pwd)
+          ECR_URI=${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY=eks-rails-production
+          IMAGE_TAG="${{ github.sha }}"
+
+          # Get the latest image digest
+          IMAGE_DIGEST=$(aws ecr describe-images --repository-name ${ECR_REPOSITORY} --image-ids imageTag=${IMAGE_TAG} --query 'imageDetails[0].imageDigest' --output text)
+
+          if [ -z "$IMAGE_DIGEST" ]; then
+            echo "Failed to get image digest for tag ${IMAGE_TAG}"
+            exit 1
+          fi
+
+          # Find and update kustomization.yaml files
+          find . -path "*/overlays/production/kustomization.yaml" | while read -r kustomization_file; do
+            echo "Updating $kustomization_file"
+
+            # Use sed to update only the digest field
+            sed -i "/name: ${ECR_URI}\/${ECR_REPOSITORY}/,/digest:/ s|digest: .*|digest: ${IMAGE_DIGEST}|" "$kustomization_file"
+
+            # Verify the change
+            if grep -q "digest: ${IMAGE_DIGEST}" "$kustomization_file"; then
+              echo "Successfully updated $kustomization_file"
+              echo "Updated content:"
+              grep -A2 "name: ${ECR_URI}/${ECR_REPOSITORY}" "$kustomization_file"
+            else
+              echo "Failed to update $kustomization_file"
+              cat "$kustomization_file"  # Debug
+            fi
+          done
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+          git add .
+          git diff --staged --quiet || (git commit -m "Update image digest to ${{ github.sha }}" && git push)

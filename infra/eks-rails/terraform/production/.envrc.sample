@@ -1,0 +1,20 @@
+export AWS_CONFIG_FILE=$(expand_path .awsconfig)
+export KUBECONFIG=$(expand_path .kubeconfig)
+
+export AWS_PROFILE=xxx
+cluster_name=eks-rails
+
+if [[ -e $KUBECONFIG ]] && ! grep $cluster_name $KUBECONFIG > /dev/null 2>&1; then
+    mv $KUBECONFIG $KUBECONFIG.$(date "+%s")
+fi
+
+if ! [[ -e $KUBECONFIG ]]; then
+    echo 'No kubeconfig. Generating....'
+    if ! aws sts get-caller-identity > /dev/null 2>&1; then
+      aws sso login
+    fi
+    aws eks update-kubeconfig --name $cluster_name --kubeconfig $KUBECONFIG
+    echo "Done! Let's 'kubectl get all'. "
+fi
+
+source_up_if_exists

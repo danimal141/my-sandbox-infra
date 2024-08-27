@@ -1,0 +1,3 @@
+# Personal Access Token (PAT)
+# https://github.com/settings/tokens
+export TF_VAR_github_token=

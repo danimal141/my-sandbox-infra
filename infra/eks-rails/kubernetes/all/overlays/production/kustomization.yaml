@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+patchesStrategicMerge:
+- argocd.yaml
+- aws-load-balancer-controller.yaml
+- external-dns.yaml
+- external-secrets-operator.yaml
+- aws-for-fluent-bit.yaml
+- external-secrets-operator.yaml
+
+resources:
+- rails-app.yaml
+- resources.yaml
+- ../../base

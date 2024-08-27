@@ -1,0 +1,7 @@
+[profile xxx]
+sso_start_url = xxx
+sso_region = ap-northeast-1
+
+sso_account_id = xxx
+sso_role_name = xxx
+region = ap-northeast-1

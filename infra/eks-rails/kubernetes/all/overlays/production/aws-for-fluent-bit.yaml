@@ -1,0 +1,15 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aws-for-fluent-bit
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  source:
+    helm:
+      parameters:
+        - name: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+          value: "arn:aws:iam::REPLACE_YOUR_AWS_ACCOUNT_ID:role/aws-for-fluent-bit"
+        - name: "cloudWatch.logGroupName"
+          value: "/aws/eks/eks-rails/fluent-bit"

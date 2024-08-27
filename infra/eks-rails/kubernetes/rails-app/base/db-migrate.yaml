@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  activeDeadlineSeconds: 7200 # 2 hours
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: db-migrate
+          command:
+            - bin/rails
+            - db:migrate
+          envFrom:
+            - secretRef:
+                name: rails-app
+            - configMapRef:
+                name: rails-app-env

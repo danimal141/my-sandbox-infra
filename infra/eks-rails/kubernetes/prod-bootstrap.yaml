@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: all
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: all
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  destination:
+    namespace: all
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: infra/eks-rails/kubernetes/all/overlays/production
+    repoURL: git@github.com:danimal141/my-sandbox-infra.git
+    targetRevision: main
+  syncPolicy:
+    automated:
+      prune: true
+  # https://github.com/argoproj/argo-cd/issues/3391#issuecomment-611666956
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jsonPointers:
+        - /status

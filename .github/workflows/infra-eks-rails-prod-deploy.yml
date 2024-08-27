@@ -1,0 +1,58 @@
+name: infra-eks-rails-prod-deploy
+
+on:
+  push:
+    paths:
+      - .github/workflows/infra-eks-rails-prod-deploy.yml
+      - infra/eks-rails/terraform/**
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency: infra-eks-rails-prod
+
+jobs:
+  plan:
+    name: Terraform apply
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: infra/eks-rails/terraform/production
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: AWS OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/terraform-github-actions
+          role-session-name: gh-actions
+          aws-region: ap-northeast-1
+
+      - name: Get Terraform Version
+        id: terraform-version
+        run: |
+          echo "value=$(cat .terraform-version)" >> $GITHUB_OUTPUT
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.terraform-version.outputs.terraform-version }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: |
+          terraform init
+
+      - name: Terraform Apply
+        id: apply
+        run: |
+          terraform apply \
+            -auto-approve \
+            -input=false

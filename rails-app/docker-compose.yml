@@ -1,0 +1,28 @@
+services:
+  db:
+    image: mysql:8.0
+    command: mysqld --default-authentication-plugin=mysql_native_password --local-infile=1 --collation-server=utf8mb4_general_ci
+    ports:
+      - '3306:3306'
+    volumes:
+      - db:/var/lib/mysql
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+      TZ: 'Asia/Tokyo'
+  web:
+    environment:
+      DATABASE_HOST: db
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.local
+    command: bash -c "rm -f tmp/pids/server.pid && bin/rails s -b '0.0.0.0'"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    volumes:
+      - bundle:/usr/local/bundle
+      - ./:/app
+volumes:
+  bundle:
+  db:

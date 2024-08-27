@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rails-app
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:danimal141/my-sandbox-infra.git
+    path: infra/eks-rails/kubernetes/rails-app/overlays/production
+    targetRevision: main
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: rails-app-production
+  syncPolicy:
+    automated:
+      prune: true

@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../base
+
+patches:
+- path: ingress.yaml
+  target:
+    kind: Ingress
+    name: rails-app
+
+- path: deployment.yaml
+  target:
+    kind: Deployment
+    name: rails-app
+
+- path: service-account.yaml
+  target:
+    kind: ServiceAccount
+    name: rails-app
+images:
+- name: REPLACE_YOUR_AWS_ACCOUNT_ID.dkr.ecr.ap-northeast-1.amazonaws.com/eks-rails-production
+  digest: sha256:a541903daf834a4cccd7fdeeaba3124ef396096bff2b5811b233ee7b5e477847

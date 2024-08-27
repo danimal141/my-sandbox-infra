@@ -1,0 +1,63 @@
+apiVersion: external-secrets.io/v1alpha1
+kind: ExternalSecret
+metadata:
+  name: github-machine-user-ssh-private-key
+  namespace: argocd
+spec:
+  refreshInterval: 5m0s
+  secretStoreRef:
+    name: parameter-store
+    kind: ClusterSecretStore
+  target:
+    creationPolicy: Owner
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+  source:
+    repoURL: "https://argoproj.github.io/argo-helm"
+    targetRevision: 5.51.6
+    chart: argo-cd
+    helm:
+      values: |
+        server:
+          service:
+            type: NodePort
+          ingress:
+            paths: [ "/*" ]
+            pathType: ImplementationSpecific
+            enabled: true
+            annotations:
+              "kubernetes.io/ingress.class": alb
+              "alb.ingress.kubernetes.io/backend-protocol": HTTPS
+              "alb.ingress.kubernetes.io/healthcheck-protocol": HTTPS
+              "alb.ingress.kubernetes.io/scheme": internet-facing
+          config:
+            repositories: |
+              - name: my-sandbox-infra
+                sshPrivateKeySecret:
+                  key: sshPrivateKey
+                  name: github-machine-user-ssh-private-key
+                type: git
+                url: git@github.com:danimal141/my-sandbox-infra.git
+        configs:
+          cm:
+            server.rbac.log.enforce.enable: "true"
+            "kustomize.buildOptions": "--load-restrictor LoadRestrictionsNone"
+          rbac:
+            "policy.default": role:readonly

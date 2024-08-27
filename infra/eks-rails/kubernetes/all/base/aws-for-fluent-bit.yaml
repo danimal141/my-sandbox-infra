@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aws-for-fluent-bit
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aws-for-fluent-bit
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://aws.github.io/eks-charts
+    helm:
+      values: |
+        cloudWatch:
+          enabled: true
+          match: "*"
+          region: "ap-northeast-1"
+          logGroupName: ""
+          logRetentionDays: "90"
+        firehose:
+          enabled: false
+        kinesis:
+          enabled: false
+        elasticsearch:
+          enabled: false
+    targetRevision: 0.1.32
+    chart: aws-for-fluent-bit
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: aws-for-fluent-bit
+  syncPolicy:
+    automated:
+      prune: true

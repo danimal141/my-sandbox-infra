@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rails-app
+spec:
+  selector:
+    matchLabels:
+      app: rails-app
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: rails-app
+    spec:
+      serviceAccountName: rails-app
+      containers:
+        - name: rails-app
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /ops/heartbeat
+              port: 3000
+            initialDelaySeconds: 10
+            timeoutSeconds: 20
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              memory: 250Mi
+          envFrom:
+            - secretRef:
+                name: rails-app
+            - configMapRef:
+                name: rails-app-env

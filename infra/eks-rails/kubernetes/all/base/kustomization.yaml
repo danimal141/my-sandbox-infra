@@ -1,0 +1,21 @@
+resources:
+- argocd.yaml
+- aws-for-fluent-bit.yaml
+- aws-load-balancer-controller.yaml
+- external-dns.yaml
+- external-secrets-operator.yaml
+- reloader.yaml
+
+configMapGenerator:
+- name: aws-account-info
+  literals:
+  - AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}
+
+vars:
+- name: AWS_ACCOUNT_ID
+  objref:
+    kind: ConfigMap
+    name: aws-account-info
+    apiVersion: v1
+  fieldref:
+    fieldpath: data.AWS_ACCOUNT_ID

@@ -1,0 +1,31 @@
+FROM ruby:3.2.2
+
+ENV TZ Asia/Tokyo
+ARG RAILS_MASTER_KEY
+ENV RAILS_MASTER_KEY ${RAILS_MASTER_KEY}
+ENV RAILS_ENV=production
+ENV RAILS_SERVE_STATIC_FILES=true
+
+RUN gem install bundler:2.3.19
+RUN curl -sL https://deb.nodesource.com/setup_18.x | bash
+RUN apt-get update -qq && \
+    apt-get install -y nodejs && \
+    apt-get install --no-install-recommends -y build-essential default-libmysqlclient-dev default-mysql-client git libvips pkg-config && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN mkdir /app
+COPY . /app
+WORKDIR /app
+
+RUN mkdir -p tmp/pids log
+COPY Gemfile /app
+COPY Gemfile.lock /app
+
+RUN bundle install --jobs 4
+
+COPY . /app
+
+RUN mkdir -p tmp/pids log
+
+RUN bin/rails assets:precompile
+CMD rm -f tmp/pids/server.pid && bin/rails server --binding=0.0.0.0

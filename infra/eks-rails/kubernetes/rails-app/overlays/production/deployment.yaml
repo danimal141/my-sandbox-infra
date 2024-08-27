@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rails-app
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: rails-app
+    spec:
+      containers:
+        - name: rails-app
+          image: REPLACE_YOUR_AWS_ACCOUNT_ID.dkr.ecr.ap-northeast-1.amazonaws.com/eks-rails-production:xxxxx
+          envFrom:
+            - secretRef:
+                name: rails-app
+            - configMapRef:
+                name: rails-app-env
